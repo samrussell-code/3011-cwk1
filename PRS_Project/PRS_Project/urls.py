@@ -15,8 +15,16 @@ Including another URLconf
 """
 from django.contrib import admin
 from django.urls import path
-from prs_app.views import *
+from prs_app.views import Home, Register, Login, Logout, List, View, Average, Rate
 
 urlpatterns = [
-    path('admin/', admin.site.urls)
+    path('', Home, name='home'),
+    path('admin/', admin.site.urls),
+    path('register/', Register, name='register'),
+    path('login/', Login, name='login'),
+    path('logout/', Logout, name='logout'),
+    path('list/', List, name='list'),
+    path('view/', View, name='view'),
+    path('average/', Average, name='average'),
+    path('rate/', Rate, name='rate'),
 ]

@@ -29,7 +29,7 @@ class ModuleInstance(models.Model): # takes consts from module and adds variable
     professors = models.ManyToManyField(Professor)
     
     def __str__(self):
-        prof_names = ', '.join(prof.name for prof in self.professors.all()) 
+        prof_names = ', '.join(prof.first_name for prof in self.professors.all()) 
         return f'{self.module_code} ({self.year.year}, {self.semester}): {prof_names}'
 
 
@@ -37,6 +37,9 @@ class Student(models.Model):
     student_id = models.IntegerField()
     first_name = models.CharField(max_length=50, default="First Name")
     last_name = models.CharField(max_length=50, default="Last Name")
+    username = models.CharField(max_length=50, default="Last Name")
+    email = models.EmailField(default="email@host.domain")
+    password = models.CharField(max_length=50, default="Password")
     modules = models.ManyToManyField(ModuleInstance)
     
     def __str__(self):
@@ -48,7 +51,8 @@ class Rating(models.Model): # this is not a good model lol
     instance_id = models.IntegerField() # module instance id
     rating = models.FloatField()
     def __str__(self):
-        return u'%i: %i, %i - %f' % (self.student_id, self.module_code, self.professor_id, self.rating)
+        #TODO: instance id needs to be module id of that instance
+        return u'%i: %i, %i - %f' % (self.student_id, self.instance_id, self.professor_id, self.rating) 
 
 
 # for admin: python manage.py createsuperuser

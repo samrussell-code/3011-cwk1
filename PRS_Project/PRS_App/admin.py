@@ -5,5 +5,6 @@ from .models import *
 
 admin.site.register(Module)
 admin.site.register(Professor)
+admin.site.register(ModuleInstance)
 admin.site.register(Student)
 admin.site.register(Rating)

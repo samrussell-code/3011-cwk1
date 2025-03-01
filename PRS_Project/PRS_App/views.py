@@ -3,6 +3,8 @@ from django.http import HttpResponse
 from django.views.decorators.csrf import csrf_exempt
 from django.http import JsonResponse
 from django.core.handlers.wsgi import WSGIRequest
+from django.db.models import Avg
+
 from prs_app.models import *
 import traceback
 

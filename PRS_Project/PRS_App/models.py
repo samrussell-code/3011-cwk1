@@ -1,4 +1,5 @@
 from django.db import models
+from django.contrib.auth.models import User
 from django.core.validators import MinValueValidator, MaxValueValidator
 
 
@@ -35,13 +36,14 @@ class ModuleInstance(models.Model):
 
 
 class Student(models.Model):
-    first_name = models.CharField(max_length=50)
-    last_name = models.CharField(max_length=50)
-    email = models.EmailField(unique=True)  # ensure uniqueness
-    modules = models.ManyToManyField(ModuleInstance, related_name="students")  # reverse access
+    username = models.CharField(max_length=50, unique=True, blank=True)
+    password = models.CharField(max_length=255, null=True, blank=True)  # Make password nullable initially
+    email = models.EmailField(unique=True)
+    modules = models.ManyToManyField(ModuleInstance, related_name="students")
 
     def __str__(self):
-        return f"{self.first_name.title()} {self.last_name.title()}"
+        return f"{self.username} ({self.email})"
+
 
     
 

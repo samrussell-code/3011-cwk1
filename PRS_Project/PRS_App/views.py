@@ -2,7 +2,11 @@ from django.shortcuts import render
 from django.http import HttpResponse
 from django.views.decorators.csrf import csrf_exempt
 from django.http import JsonResponse
+from django.views.decorators.csrf import csrf_exempt
+from django.contrib.auth.hashers import make_password
 from django.core.handlers.wsgi import WSGIRequest
+from django.contrib.auth import authenticate, login
+from django.contrib.auth import logout as auth_logout
 from django.db.models import Avg
 
 from prs_app.models import *
@@ -17,16 +21,58 @@ def Home(request):
 
 @csrf_exempt # this goes on top of all post req funcs
 def Register(request):
-    return HttpResponse("register")
+    if request.method == "POST":
+        try:
+            username = request.POST.get("username")
+            email = request.POST.get("email")
+            password = request.POST.get("password")
+
+            if not username or not email or not password:
+                return JsonResponse({"error": "Username, email, and password are required"}, status=400)
+            if Student.objects.filter(username=username).exists():
+                return JsonResponse({"error": "Username already taken"}, status=400)
+            if Student.objects.filter(email=email).exists():
+                return JsonResponse({"error": "Email already registered"}, status=400)
+
+            hashed_password = make_password(password)
+            # object create
+            student = Student.objects.create(
+                username=username,
+                email=email,
+                password=hashed_password,
+            )
+            return JsonResponse({"message": "Registration successful", "student_id": student.id}, status=201)
+        except Exception as e:
+            return JsonResponse({"error": str(e)}, status=500)
+    else:
+        return JsonResponse({"error": "must be POST"}, status=405)
 
 @csrf_exempt # this goes on top of all post req funcs
 def Login(request):
-    return HttpResponse("login")
+    if request.method == 'POST':
+        username = request.POST.get('username')
+        password = request.POST.get('password')
+
+        if not username or not password:
+            return JsonResponse({"error": "Username and password are required"}, status=400)
+
+        user = authenticate(request, username=username, password=password)
+        if user is not None:
+            login(request, user) 
+            return JsonResponse({"message": "Login successful"})
+        else:
+            return JsonResponse({"error": "Invalid credentials"}, status=400)
+    else:
+        return JsonResponse({"error": "Only POST method allowed"}, status=405)
 
 @csrf_exempt # this goes on top of all post req funcs
 def Logout(request):
-    return HttpResponse("logout")
-
+    if request.method == 'POST':  
+        auth_logout(request)  # built-in logout 
+        return HttpResponse("Logout successful", status=200)
+    else:
+        return HttpResponse("Invalid request method", status=405) # non-post
+    
 def List(request):
     module_instances = ModuleInstance.objects.all()
 

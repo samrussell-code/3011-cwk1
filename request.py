@@ -3,18 +3,44 @@ import requests
 
 base_url = "http://127.0.0.1:8000"
 
-def parse_register(*args):
-    resp = requests.post(f"{base_url}/register/")
-    print("Register:", resp.text)
 
+def parse_register(*args):
+    username = input("Enter username: ")
+    email = input("Enter email: ")
+    password = input("Enter password: ")
+    resp = requests.post(f"{base_url}/register/", data={
+        "username": username,
+        "email": email,
+        "password": password,
+    })
+    print("Register:", resp.text)
+    
 def parse_login(*args):
-    resp = requests.post(f"{base_url}/login/")
-    print("Login:", resp.text)
+    username = input("Enter username: ")
+    password = input("Enter password: ")
+
+    resp = requests.post(f"{base_url}/login/", data={"username": username, "password": password})
+    if resp.status_code == 200:
+        try:
+            if resp.text.strip(): 
+                print("Login successful!")
+                print(resp.json())
+            else:
+                print("Login successful, but no message returned.")
+        except ValueError:
+            print("Unexpected response format. No JSON returned.")
+    else:
+        print("Login failed!")
+        print(f"Error response: {resp.text}")  
 
 def parse_logout(*args):
-    resp = requests.post(f"{base_url}/logout/")
-    print("Logout:", resp.text)
-
+    resp = requests.post(f"{base_url}/logout/")  
+    if resp.status_code == 200:
+        print("Logout successful!")
+        print(resp.text)
+    else:
+        print("Logout failed!")
+        print(f"Error response: {resp.text}")  
 
 def parse_list(*args):
     resp = requests.get(f"{base_url}/list/")

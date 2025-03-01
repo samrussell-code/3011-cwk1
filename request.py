@@ -15,27 +15,62 @@ def parse_logout(*args):
     resp = requests.post(f"{base_url}/logout/")
     print("Logout:", resp.text)
 
-import requests
 
 def parse_list(*args):
     resp = requests.get(f"{base_url}/list/")
     
-    if resp.status_code == 200:  #success code
+    if resp.status_code == 200:
         try:
-            data = resp.json()  # parse
-            print("List:", data)  # print
+            data = resp.json() 
+            if data:
+                for item in data:
+                    professors = ", ".join([prof['name'] for prof in item['professors']])  
+                    print(f"Module {item['module_code']} - {item['module_name']} ({item['year']} - {item['semester']}):")
+                    print(f"  Professors: {professors}")
+                    print()
+            else:
+                print("No data available.")
         except ValueError:
             print("Invalid JSON")
     else:
         print(f"Error code {resp.status_code}")
 
+
+
 def parse_view(*args):
-    resp = requests.get(f"{base_url}/view/")
-    print("View:", resp.text)
+    resp = requests.get(f"{base_url}/view/") 
+    if resp.status_code == 200:
+        try:
+            data = resp.json()  # parse JSON
+            for professor in data:
+                print(f"{professor['professor']} ({professor['id']}) has a rating of {professor['rating']} ({professor['avg_rating']})") 
+        except ValueError:
+            print("Invalid JSON")
+    else:
+        print(f"Error code {resp.status_code}")
+
+
 
 def parse_average(*args):
-    resp = requests.get(f"{base_url}/average/")
-    print("Average:", resp.text)
+    if len(args) < 2:
+        print("Usage: python request.py average <professor_id> <module_code>")
+        return
+
+    prof_id, mod_code = args[0], args[1]
+    resp = requests.get(f"{base_url}/average/", params={'professor_id': prof_id, 'module_code': mod_code})  # add params
+
+    if resp.status_code == 200:  # success code
+        try:
+            data = resp.json()  # parse JSON
+            print(f"The rating of Professor {data['professor']} ({data['id']}) in module {data['module_name']} ({data['module_code']}) is {data['rating']} ({data['avg_rating']})")  # output professor, stars and avg rating
+        except ValueError:
+            print("Invalid JSON")
+    else:
+        print(f"Error code {resp.status_code}")
+
+
+
+
 
 def parse_rate(*args):
     resp = requests.post(f"{base_url}/rate/")

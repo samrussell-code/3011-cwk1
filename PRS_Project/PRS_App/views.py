@@ -8,6 +8,13 @@ from django.core.handlers.wsgi import WSGIRequest
 from django.contrib.auth import authenticate, login
 from django.contrib.auth import logout as auth_logout
 from django.db.models import Avg
+from django.contrib.auth.decorators import login_required
+from django.utils.decorators import method_decorator
+from django.core.exceptions import ObjectDoesNotExist
+from django.db.utils import IntegrityError
+from django.db.models import Q
+import json
+
 
 from prs_app.models import *
 import traceback
@@ -19,7 +26,7 @@ def HandleRegisterRequest(request):
 def Home(request):
     return HttpResponse("home")
 
-@csrf_exempt # this goes on top of all post req funcs
+@csrf_exempt
 def Register(request):
     if request.method == "POST":
         try:
@@ -28,24 +35,28 @@ def Register(request):
             password = request.POST.get("password")
 
             if not username or not email or not password:
-                return JsonResponse({"error": "Username, email, and password are required"}, status=400)
-            if Student.objects.filter(username=username).exists():
-                return JsonResponse({"error": "Username already taken"}, status=400)
-            if Student.objects.filter(email=email).exists():
-                return JsonResponse({"error": "Email already registered"}, status=400)
+                return JsonResponse({"error": "username, email, and password required"}, status=400)
+
+            if User.objects.filter(username=username).exists():
+                return JsonResponse({"error": "username already taken"}, status=400)
+            if User.objects.filter(email=email).exists():
+                return JsonResponse({"error": "email already registered"}, status=400)
 
             hashed_password = make_password(password)
-            # object create
-            student = Student.objects.create(
-                username=username,
-                email=email,
-                password=hashed_password,
-            )
-            return JsonResponse({"message": "Registration successful", "student_id": student.id}, status=201)
+
+            # django user
+            user = User.objects.create(username=username, email=email, password=hashed_password)
+
+            # linked student (for storing models, is an extension of django user)
+            student = Student.objects.create(user=user)
+
+            return JsonResponse({"message": "registration successful", "student_id": student.id}, status=201)
+        
         except Exception as e:
             return JsonResponse({"error": str(e)}, status=500)
-    else:
-        return JsonResponse({"error": "must be POST"}, status=405)
+
+    return JsonResponse({"error": "must be POST"}, status=405)
+
 
 @csrf_exempt # this goes on top of all post req funcs
 def Login(request):
@@ -161,8 +172,70 @@ def Average(request):
         print(f"Error: {error_message}")
         return JsonResponse({"error": "An internal error occurred. Please check logs for details."}, status=500)
 
-
-@csrf_exempt # this goes on top of all post req funcs
+@login_required
+@csrf_exempt
 def Rate(request):
-    return HttpResponse("rate")
+    if request.method != 'POST':
+        return JsonResponse({"error": "Invalid request method"}, status=405)
 
+    try:
+        if not request.user.is_authenticated:
+            return JsonResponse({"error": "User must be logged in"}, status=401)
+
+        data = json.loads(request.body)
+
+        prof_id = data.get("professor_id")
+        mod_code = data.get("module_code")
+        year = data.get("year")
+        semester = data.get("semester")
+        rating_value = data.get("rating")
+
+        if not all([prof_id, mod_code, year, semester, rating_value]):
+            return JsonResponse({"error": "Missing required parameters"}, status=400)
+
+        try:
+            rating_value = float(rating_value)
+        except ValueError:
+            return JsonResponse({"error": "Rating must be a valid number"}, status=400)
+
+        if not (0 <= rating_value <= 5):
+            return JsonResponse({"error": "Rating must be between 0 and 5"}, status=400)
+
+        student = Student.objects.filter(user=request.user).first()
+        if not student:
+            return JsonResponse({"error": "Student profile not found"}, status=404)
+
+        professor = Professor.objects.filter(id=prof_id).first()
+        if not professor:
+            return JsonResponse({"error": "Professor not found"}, status=404)
+
+        module_instance = ModuleInstance.objects.filter(
+            module__module_code=mod_code, year=year, semester=semester
+        ).first()
+
+        if not module_instance:
+            return JsonResponse({"error": "Module instance not found"}, status=404)
+
+        existing_rating = Rating.objects.filter(
+            student=student, professor=professor, module_instance=module_instance
+        ).exists()
+
+        if existing_rating:
+            return JsonResponse({"error": "You have already rated this professor for this module instance"}, status=400)
+
+        Rating.objects.create(
+            student=student, professor=professor, module_instance=module_instance, rating=rating_value
+        )
+
+        return JsonResponse({
+            "professor_id": prof_id,
+            "module_code": mod_code,
+            "year": year,
+            "semester": semester,
+            "rating": rating_value
+        }, status=201)
+
+    except (ValueError, TypeError):
+        return JsonResponse({"error": "Invalid input format"}, status=400)
+    except Exception as e:
+        return JsonResponse({"error": str(e)}, status=500)

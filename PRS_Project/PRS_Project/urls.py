@@ -17,7 +17,6 @@ from django.contrib import admin
 from django.urls import path
 from prs_app.views import Home, Register, Login, Logout, List, View, Average, Rate
 
-
 urlpatterns = [
     path('', Home, name='home'),
     path('admin/', admin.site.urls),

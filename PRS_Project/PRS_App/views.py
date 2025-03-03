@@ -89,88 +89,94 @@ def List(request):
 
     result = []
     for instance in module_instances:
-
         module_data = {
-            "module_code": instance.module.module_code, 
-            "module_name": instance.module.title, 
-            "year": instance.year,  
-            "semester": instance.get_semester_display(),  
+            "module_code": instance.module.module_code,
+            "module_name": instance.module.title,
+            "year": instance.start_date.year,  # Get the year from start_date
+            "semester": instance.get_semester_display(),
             "professors": [
                 {
-                    "id": prof.id,  
-                    "name": f"Professor {prof.first_name[0]}. {prof.last_name.title()}" 
+                    "id": prof.professor_id,  # Make sure you're returning professor_id
+                    "name": f"Professor {prof.first_name[0]}. {prof.last_name.title()}"
                 }
-                for prof in instance.professors.all()  
+                for prof in instance.professors.all()
             ]
         }
         result.append(module_data)
-    return JsonResponse(result, safe=False)
 
+    return JsonResponse(result, safe=False)
 
 def View(request):
     all_professors = Professor.objects.all()
-    prof_map = {prof.id: f"{prof.first_name.title()} {prof.last_name.title()}" for prof in all_professors}
-    ratings = Rating.objects.select_related("professor").values("professor_id", "rating")
-    rating_map = {r["professor_id"]: r["rating"] for r in ratings}
-    res = [
-        {
-            "professor": prof_map[prof.id],
-            "id": prof.id,
-            "rating": "*" * round(rating_map.get(prof.id, 0)),  # format rating as stars
-            "avg_rating": round(rating_map.get(prof.id, 0), 2)  # show average rating rounded to 2 decimals
-        }
-        for prof in all_professors
-    ]
-
+    prof_map = {prof.professor_id: f"{prof.first_name.title()} {prof.last_name.title()}" for prof in all_professors}
+    
+    res = []
+    for prof in all_professors:
+        ratings = Rating.objects.filter(professor=prof)
+        
+        if not ratings.exists():
+            avg_rating = 0
+        else:
+            avg_rating = ratings.aggregate(avg_rating=Avg("rating"))["avg_rating"] or 0
+        
+        rounded_rating = round(avg_rating)
+        rating_stars = '*' * rounded_rating
+        
+        res.append({
+            "professor": prof_map[prof.professor_id],  
+            "id": prof.professor_id,  
+            "rating": rating_stars,  
+            "avg_rating": rounded_rating  
+        })
+    
     return JsonResponse(res, safe=False)
 
 
 
+
+
 def Average(request):
+
     try:
-        # expected format -> 'professor_id' and 'module_code' as GET parameters
-        prof_id = request.GET.get('professor_id')  # get professor_id from query params
-        mod_code = request.GET.get('module_code')  # get module_code from query params
-        
+        prof_id = request.GET.get('professor_id')
+        mod_code = request.GET.get('module_code')
+
         if not prof_id or not mod_code:
             return JsonResponse({"error": "Missing professor_id or module_code"}, status=400)
 
-        # fetch professor name
-        professor = Professor.objects.filter(id=prof_id).first()
+        professor = Professor.objects.filter(professor_id=prof_id).first()
         if not professor:
             return JsonResponse({"error": "Professor not found"}, status=404)
 
-        professor_name = f"{professor.first_name.title()} {professor.last_name.title()}"
-        
-        # fetch the module instance
         module_instance = ModuleInstance.objects.filter(module__module_code=mod_code).first()
         if not module_instance:
             return JsonResponse({"error": "Module instance not found"}, status=404)
 
-        module_name = module_instance.module.title  # Assuming 'title' is a field in the Module model
-        ratings = Rating.objects.filter(professor_id=prof_id, module_instance=module_instance) 
+        ratings = Rating.objects.filter(professor=professor, module_instance=module_instance)
+
         if not ratings.exists():
-            return JsonResponse({"error": "No ratings found for this professor and module"}, status=404)
-        avg_rating = ratings.aggregate(avg_rating=Avg("rating"))["avg_rating"]
-        
-        if avg_rating is None:
-            return JsonResponse({"error": "No ratings available for this professor/module combination"}, status=404)
+            avg_rating = 0  # set avg to 0 if no ratings
+        else:
+            avg_rating = ratings.aggregate(avg_rating=Avg("rating"))["avg_rating"] or 0  # ensure avg is 0 if None
 
         rounded_rating = round(avg_rating)
         rating_stars = '*' * rounded_rating 
+ 
         return JsonResponse({
-            "professor": professor_name,
+            "professor": f"{professor.first_name.title()} {professor.last_name.title()}",
             "id": prof_id,
-            "rating": rating_stars,  # asterisks
+            "rating": rating_stars,
             "avg_rating": rounded_rating,
-            "module_name": module_name, 
-            "module_code": mod_code, 
+            "module_name": module_instance.module.title,
+            "module_code": mod_code,
         })
-    
+
     except Exception as e:
         error_message = traceback.format_exc()
-        print(f"Error: {error_message}")
+        print(f"ERROR: {error_message}")  
         return JsonResponse({"error": "An internal error occurred. Please check logs for details."}, status=500)
+
+
 
 @login_required
 @csrf_exempt
@@ -186,12 +192,18 @@ def Rate(request):
 
         prof_id = data.get("professor_id")
         mod_code = data.get("module_code")
-        year = data.get("year")
+        year = data.get("year")  # year is string
         semester = data.get("semester")
         rating_value = data.get("rating")
 
         if not all([prof_id, mod_code, year, semester, rating_value]):
             return JsonResponse({"error": "Missing required parameters"}, status=400)
+
+        try:
+            year_date = f"{year}-01-01"  # need to do to store in model
+            year = datetime.strptime(year_date, "%Y-%m-%d").date()
+        except ValueError:
+            return JsonResponse({"error": "Year must be a valid date"}, status=400)
 
         try:
             rating_value = float(rating_value)
@@ -205,12 +217,13 @@ def Rate(request):
         if not student:
             return JsonResponse({"error": "Student profile not found"}, status=404)
 
-        professor = Professor.objects.filter(id=prof_id).first()
+        professor = Professor.objects.filter(professor_id=prof_id).first() 
         if not professor:
             return JsonResponse({"error": "Professor not found"}, status=404)
 
+
         module_instance = ModuleInstance.objects.filter(
-            module__module_code=mod_code, year=year, semester=semester
+            module__module_code=mod_code, semester=semester, start_date__year=year.year 
         ).first()
 
         if not module_instance:
@@ -230,7 +243,7 @@ def Rate(request):
         return JsonResponse({
             "professor_id": prof_id,
             "module_code": mod_code,
-            "year": year,
+            "year": str(year),  
             "semester": semester,
             "rating": rating_value
         }, status=201)

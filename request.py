@@ -1,7 +1,7 @@
 import sys
 import requests
 
-base_url = "http://127.0.0.1:8000"
+base_url = "https://samrussell26.eu.pythonanywhere.com"
 session = requests.Session()
 
 def parse_register(*args):
